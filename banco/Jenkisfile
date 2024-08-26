@@ -1,0 +1,47 @@
+pipeline{
+        agent any
+        
+        environment {
+            DOCKER_IMAGE_NAME = 'banco'
+            DOCKER_IMAGE_VERSION = '1.0'
+        }
+        stages{
+            stage("Connect to github"){
+                steps{
+                    git branch: 'main',
+                        credentialsId: 'key',
+                        url: 'git@github.com:saitel/saitel_crm.git'
+                    sh "chmod +x -R ${env.WORKSPACE}"
+                }
+            }
+            stage("Build docker image"){
+                steps{
+                    sh "cd /var/lib/jenkins/workspace/banco && docker build -t ${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_VERSION} ."
+                }
+            }
+            stage("Import image to kubernetes locally"){
+                steps{
+                    sh "cd /var/lib/jenkins/workspace/banco && docker save ${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_VERSION} > ${DOCKER_IMAGE_NAME}${DOCKER_IMAGE_VERSION}.tar"
+                    withCredentials([string(credentialsId: 'pc01pwd', variable: 'pc01pwd')]) {
+                        sh ' cd /var/lib/jenkins/workspace/banco && echo ${pc01pwd} | sudo -S microk8s ctr image import ${DOCKER_IMAGE_NAME}${DOCKER_IMAGE_VERSION}.tar'
+                    }
+                }
+            }
+            stage("Deploy changes to kubernetes"){
+                steps{
+                    withCredentials([string(credentialsId: 'pc01pwd', variable: 'pc01pwd')]) {
+                        sh ' cd /var/lib/jenkins/workspace/banco && echo ${pc01pwd} | sudo -S microk8s kubectl apply -f k8s/banco-deployment.yml'
+                        sh ' cd /var/lib/jenkins/workspace/banco && echo ${pc01pwd} | sudo -S microk8s kubectl apply -f k8s/banco-service.yml'
+                    }
+                }
+            }
+            
+            stage("Clean tar file generated"){
+                steps{
+                    withCredentials([string(credentialsId: 'pc01pwd', variable: 'pc01pwd')]) {
+                        sh ' cd /var/lib/jenkins/workspace/banco && echo ${pc01pwd} | sudo -S rm ${DOCKER_IMAGE_NAME}${DOCKER_IMAGE_VERSION}.tar'
+                    }
+                }
+            }
+        }
+}
