@@ -7,7 +7,7 @@ spec:
     app: banco
   type: NodePort
   ports:
-  - nodePort: 32090
-    port: 8090
-    targetPort: 8090
+  - nodePort: 32080
+    port: 8080
+    targetPort: 8080
     protocol: TCP
